@@ -1,9 +1,12 @@
 #define _USE_MATH_DEFINES
+
 #include <SDL2/SDL.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <signal.h>
+#include <regex.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -74,7 +77,7 @@ void note_loop(AudioData *audiodata, double note_frequencies[NUM_NOTES]) {
             // Pause in between notes
             SDL_PauseAudio(1);
             Uint32 delay_time = SDL_GetTicks() - current_time;
-            SDL_Delay(250 - delay_time);
+            SDL_Delay(200 - delay_time);
 
             i++;
             if (i >= NUM_NOTES) break;
@@ -88,24 +91,112 @@ void note_loop(AudioData *audiodata, double note_frequencies[NUM_NOTES]) {
     }
 }
 
-void initialize_note_freqs(double note_frequencies[NUM_NOTES]) {
-    int interval = -9; // Start at C4, which is -9 semis away from A4
+int get_interval_from_key(char *key) {
+    if (!strcmp(key, "B#") || !strcmp(key, "C")) {
+        return -9;
+    }
+    if (!strcmp(key, "C#") || !strcmp(key, "Db")) {
+        return -8;
+    }
+    if (!strcmp(key, "D")) {
+        return -7;
+    }
+    if (!strcmp(key, "D#") || !strcmp(key, "Eb")) {
+        return -6;
+    }
+    if (!strcmp(key, "E") || !strcmp(key, "Fb")) {
+        return -5;
+    }
+    if (!strcmp(key, "E#") || !strcmp(key, "F")) {
+        return -4;
+    }
+    if (!strcmp(key, "F#") || !strcmp(key, "Gb")) {
+        return -3;
+    }
+    if (!strcmp(key, "G")) {
+        return -2;
+    }
+    if (!strcmp(key, "G#") || !strcmp(key, "Ab")) {
+        return -1;
+    }
+    if (!strcmp(key, "A")) {
+        return 0;
+    }
+    if (!strcmp(key, "A#") || !strcmp(key, "Bb")) {
+        return 1;
+    }
+    if (!strcmp(key, "B") || !strcmp(key, "Cb")) {
+        return 2;
+    }
+
+    // Return A4 by default
+    return 0;
+}
+
+void initialize_note_freqs(double note_frequencies[NUM_NOTES], char *key, int major_scale) {
+    int interval = get_interval_from_key(key); // Start at C4, which is -9 semis away from A4
     for (int i = 0; i < NUM_NOTES; i++) {
         double factor = pow(2.0, 1.0/12.0);
         note_frequencies[i] = A4_FREQ_HZ * pow(factor, interval);
-        // Major scale
-        interval += (i == 2 || i == 6) ? 1 : 2;
+        if (major_scale) {
+            interval += (i == 2 || i == 6) ? 1 : 2;
+        }
+        else {  // Minor scale
+            interval += (i == 1 || i == 5) ? 1 : 2;
+        }
     }
 }
 
-int main() {
+void print_usage() {
+    printf("usage: sine_wave <key> <\"major\"|\"minor\">\n");
+    printf("       For sharps, use # (e.g. \"C#\" for C sharp\n");
+    printf("       For flats, use b (e.g. \"Bb\" for B flat\n");
+}
+
+int parse_args(int argc, char *argv[])
+{
+    if (argc != 3) return 0;
+
+    // Check key
+    char *key = argv[1];
+    regex_t regex;
+    if (regcomp(&regex, "^[A-Ga-g](#|b)?$", REG_EXTENDED)) {
+        printf("Unable to compile regex\n");
+        return 0;
+    }
+    int regex_ret = regexec(&regex, key, 0, NULL, 0);
+    if (regex_ret == REG_NOMATCH) {
+        printf("Invalid key = %s \n", key);
+        return 0;
+    }
+
+    // Check mode
+    char *mode = argv[2];
+    if (strcmp(mode, "major") && strcmp(mode, "minor")) {
+        printf("Invalid mode = %s \n", mode);
+        return 0;
+    }
+
+    return 1;
+}
+
+int main(int argc, char *argv[]) {
     signal(SIGINT, signal_handler);
+
+    if (!parse_args(argc, argv)) {
+        print_usage();
+        return 1;
+    }
+
+    char *key = argv[1];
+    double note_frequencies[NUM_NOTES];
+    int major_scale = !strcmp(argv[2], "major");
+    initialize_note_freqs(note_frequencies, key, major_scale);
 
     if (SDL_Init(SDL_INIT_AUDIO) < 0) {
         printf("Error initializing SDL; %s\n", SDL_GetError());
         return 1;
     }
-
 
     AudioData audiodata = {0};
     SDL_AudioSpec spec = {0};
@@ -118,9 +209,6 @@ int main() {
         printf("SDL unable to open audio; %s\n", SDL_GetError());
         return 1;
     }
-
-    double note_frequencies[NUM_NOTES];
-    initialize_note_freqs(note_frequencies);
 
     note_loop(&audiodata, note_frequencies);
 
