@@ -196,8 +196,8 @@ void initialize_note_data(NoteData note_data[NUM_NOTES], char *key, int major_sc
 
 void print_usage() {
     printf("usage: sine_wave <key> <\"major\"|\"minor\">\n");
-    printf("       For sharps, use # (e.g. \"C#\" for C sharp\n");
-    printf("       For flats, use b (e.g. \"Bb\" for B flat\n");
+    printf("       For sharps, use # (e.g. \"C#\" for C sharp)\n");
+    printf("       For flats, use b (e.g. \"Bb\" for B flat)\n");
 }
 
 int parse_args(int argc, char *argv[]) {
