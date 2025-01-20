@@ -16,9 +16,13 @@
 #define NUM_NOTES 8
 #define A4_FREQ_HZ 440.0
 
+#define AMP_VOL_HI 0.5
+#define AMP_VOL_LO 0.0
+
 typedef struct AudioData {
-    double frequency;
+    double frequency;  // Pitch
     double phase;
+    double amplitude;  // Volume
 } AudioData;
 
 typedef struct NoteData {
@@ -27,10 +31,23 @@ typedef struct NoteData {
     double frequency;
 } NoteData;
 
+char *g_pitch_classes[12][2] = {
+    { "B#", "C"  }, // 0
+    { "C#", "Db" }, // 1
+    { "D" , "Cx" }, // 2
+    { "D#", "Eb" }, // 3
+    { "E" , "Fb" }, // 4
+    { "E#", "F"  }, // 5
+    { "F#", "Gb" }, // 6
+    { "G" , "Fx" }, // 7
+    { "G#", "Ab" }, // 8
+    { "A" , "Gx" }, // 9
+    { "A#", "Bb" }, // 10
+    { "B" , "Cb" }, // 11
+};
+
 void audio_callback(void *userdata, Uint8 *stream, int len) {
     AudioData *audiodata = (AudioData *) userdata;
-
-    double volume_mult = 0.5; // amplitude
 
     int sample_rate = 44100;
     double phase_increment = (2.0*M_PI * audiodata->frequency) / sample_rate;
@@ -38,7 +55,7 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
     int samples = len / sizeof(Sint16);
 
     for (int i = 0; i < samples; i++) {
-        buffer[i] = (Sint16) (32767 * sin(audiodata->phase) * volume_mult);
+        buffer[i] = (Sint16) (32767 * sin(audiodata->phase) * audiodata->amplitude);
         audiodata->phase += phase_increment;
         if (audiodata->phase > 2.0*M_PI) audiodata->phase -= 2.0*M_PI;
     }
@@ -56,6 +73,7 @@ int initialize_audio_spec_data(SDL_AudioSpec *spec, AudioData *audiodata) {
 
     audiodata->frequency = A4_FREQ_HZ;
     audiodata->phase = 0.0;
+    audiodata->amplitude = AMP_VOL_HI;
 
     spec->freq = 44100;
     spec->format = AUDIO_S16SYS;
@@ -67,15 +85,17 @@ int initialize_audio_spec_data(SDL_AudioSpec *spec, AudioData *audiodata) {
     return 1;
 }
 
-void note_loop(AudioData *audiodata, NoteData note_data[NUM_NOTES]) {
+void loop_through_scale(AudioData *audiodata, NoteData notes_in_scale[NUM_NOTES]) {
+    SDL_PauseAudio(0);
     for (int i = 0; i < NUM_NOTES; i++) {
-        audiodata->frequency = note_data[i].frequency;
-        printf("%-2s (%.2f Hz)\n", note_data[i].name, audiodata->frequency);
-        SDL_PauseAudio(0);
-        SDL_Delay(200);
-        SDL_PauseAudio(1);
-        SDL_Delay(85);
+        audiodata->frequency = notes_in_scale[i].frequency;
+        audiodata->amplitude = AMP_VOL_HI;
+        printf("%-2s (%.2f Hz)\n", notes_in_scale[i].name, audiodata->frequency);
+        SDL_Delay(225);
+        audiodata->amplitude = AMP_VOL_LO;
+        SDL_Delay(90);
     }
+    SDL_PauseAudio(1);
 }
 
 int get_dist_from_a4(char *note) {
@@ -120,10 +140,10 @@ int get_dist_from_a4(char *note) {
     return 0;
 }
 
-int _get_pitch_class_idx(char *key, char *pitch_classes[12][2]) {
+int _get_pitch_class_idx(char *key) {
     for (int i = 0; i < 12; i++) {
         for (int j = 0; j < 2; j++) {
-            if (!strcmp(key, pitch_classes[i][j])) {
+            if (!strcmp(key, g_pitch_classes[i][j])) {
                 return i;
             }
         }
@@ -132,33 +152,14 @@ int _get_pitch_class_idx(char *key, char *pitch_classes[12][2]) {
     return -1;
 }
 
-void _initialize_note_data_names(NoteData note_data[NUM_NOTES], char *key, int major_scale) {
-    char *pitch_classes[12][2] = {
-        { "B#", "C"  }, // 0
-        { "C#", "Db" }, // 1
-        { "D" , "Cx" }, // 2
-        { "D#", "Eb" }, // 3
-        { "E" , "Fb" }, // 4
-        { "E#", "F"  }, // 5
-        { "F#", "Gb" }, // 6
-        { "G" , "Fx" }, // 7
-        { "G#", "Ab" }, // 8
-        { "A" , "Gx" }, // 9
-        { "A#", "Bb" }, // 10
-        { "B" , "Cb" }, // 11
-    };
-
-    int pc_idx = _get_pitch_class_idx(key, pitch_classes);
+void _initialize_note_names(NoteData note_data[NUM_NOTES], char *key, int major_scale) {
+    int pc_idx = _get_pitch_class_idx(key);
     char cur_note_name = key[0];
     for (int i = 0; i < NUM_NOTES; i++) {
-        //printf("---\n");
-        //printf("i = %d\n", i);
-        //printf("pc_idx = %d\n", pc_idx);
-        //printf("cur_note_name = %c\n", cur_note_name);
         for (int j = 0; j < 2; j++) {
-            if (i == 0 && strcmp(key, pitch_classes[pc_idx][j])) continue;
-            if (cur_note_name == pitch_classes[pc_idx][j][0]) {
-                strncpy(note_data[i].name, pitch_classes[pc_idx][j], 2);
+            if (i == 0 && strcmp(key, g_pitch_classes[pc_idx][j])) continue;
+            if (cur_note_name == g_pitch_classes[pc_idx][j][0]) {
+                strncpy(note_data[i].name, g_pitch_classes[pc_idx][j], 2);
                 cur_note_name++;
                 if (cur_note_name > 'G') cur_note_name = 'A';
                 break;
@@ -175,16 +176,15 @@ void _initialize_note_data_names(NoteData note_data[NUM_NOTES], char *key, int m
     }
 }
 
-void initialize_note_data(NoteData note_data[NUM_NOTES], char *key, int major_scale) {
-    _initialize_note_data_names(note_data, key, major_scale);
-
+void _initialize_note_frequencies(NoteData notes_in_scale[NUM_NOTES], char *key, int major_scale) {
     int interval = get_dist_from_a4(key);  // Distance from A4, in semitones
+                                           //
     for (int i = 0; i < NUM_NOTES; i++) {
-        note_data[i].interval = interval;
+        notes_in_scale[i].interval = interval;
 
         // Generate frequency based on interval
         double factor = pow(2.0, 1.0/12.0);
-        note_data[i].frequency = A4_FREQ_HZ * pow(factor, interval);
+        notes_in_scale[i].frequency = A4_FREQ_HZ * pow(factor, interval);
         if (major_scale) {
             interval += (i == 2 || i == 6) ? 1 : 2;
         }
@@ -192,6 +192,11 @@ void initialize_note_data(NoteData note_data[NUM_NOTES], char *key, int major_sc
             interval += (i == 1 || i == 4) ? 1 : 2;
         }
     }
+}
+
+void initialize_notes_in_scale(NoteData notes_in_scale[NUM_NOTES], char *key, int major_scale) {
+    _initialize_note_names(notes_in_scale, key, major_scale);
+    _initialize_note_frequencies(notes_in_scale, key, major_scale);
 }
 
 void print_usage() {
@@ -236,8 +241,8 @@ int main(int argc, char *argv[]) {
 
     char *key = argv[1];
     int major_scale = !strcmp(argv[2], "major");
-    NoteData note_data[NUM_NOTES];
-    initialize_note_data(note_data, key, major_scale);
+    NoteData notes_in_scale[NUM_NOTES];
+    initialize_notes_in_scale(notes_in_scale, key, major_scale);
 
     if (SDL_Init(SDL_INIT_AUDIO) < 0) {
         printf("Error initializing SDL; %s\n", SDL_GetError());
@@ -256,7 +261,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    note_loop(&audiodata, note_data);
+    loop_through_scale(&audiodata, notes_in_scale);
 
     SDL_CloseAudio();
     SDL_Quit();
