@@ -28,7 +28,7 @@ typedef struct AudioData {
 
 typedef struct NoteData {
     char name[2];
-    char interval; // i.e. distance from A4. A4 == 0.
+    int interval; // i.e. distance from A4. A4 == 0.
     double frequency;
 } NoteData;
 
